@@ -7,6 +7,10 @@ const { authMiddleware, optionalAuth } = require("../middleware/auth");
 // Get all projects (with pagination and filtering) - Feed endpoint
 router.get("/", optionalAuth, async (req, res) => {
   try {
+    console.log("=== PROJECTS GET REQUEST ===");
+    console.log("Query params:", req.query);
+    console.log("User:", req.user ? req.user.username : "Not authenticated");
+
     const {
       page = 1,
       limit = 12,
@@ -64,6 +68,10 @@ router.get("/", optionalAuth, async (req, res) => {
 
     // Get total count for pagination
     const total = await DIYProject.countDocuments(finalFilter);
+    console.log(
+      `Fetched ${projects.length} projects for page ${page} with filter:`,
+      finalFilter
+    );
 
     // Add user-specific data if authenticated
     const projectsWithUserData = projects.map((project) => {
@@ -142,6 +150,11 @@ router.get("/:id", optionalAuth, async (req, res) => {
 // Create new project
 router.post("/", authMiddleware, async (req, res) => {
   try {
+    console.log("Received project data:", JSON.stringify(req.body, null, 2));
+    console.log("Category received:", req.body.category);
+    console.log("Category type:", typeof req.body.category);
+    console.log("Category length:", req.body.category?.length);
+
     const projectData = {
       ...req.body,
       author: req.user._id,
