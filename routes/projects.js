@@ -7,6 +7,10 @@ const { authMiddleware, optionalAuth } = require("../middleware/auth");
 // Get all projects (with pagination and filtering) - Feed endpoint
 router.get("/", optionalAuth, async (req, res) => {
   try {
+    console.log("=== PROJECTS GET REQUEST ===");
+    console.log("Query params:", req.query);
+    console.log("User:", req.user ? req.user.username : "Not authenticated");
+
     const {
       page = 1,
       limit = 12,
@@ -64,6 +68,10 @@ router.get("/", optionalAuth, async (req, res) => {
 
     // Get total count for pagination
     const total = await DIYProject.countDocuments(finalFilter);
+    console.log(
+      `Fetched ${projects.length} projects for page ${page} with filter:`,
+      finalFilter
+    );
 
     // Add user-specific data if authenticated
     const projectsWithUserData = projects.map((project) => {
@@ -142,6 +150,11 @@ router.get("/:id", optionalAuth, async (req, res) => {
 // Create new project
 router.post("/", authMiddleware, async (req, res) => {
   try {
+    console.log("Received project data:", JSON.stringify(req.body, null, 2));
+    console.log("Category received:", req.body.category);
+    console.log("Category type:", typeof req.body.category);
+    console.log("Category length:", req.body.category?.length);
+
     const projectData = {
       ...req.body,
       author: req.user._id,
@@ -426,6 +439,166 @@ router.get("/saved/list", authMiddleware, async (req, res) => {
   }
 });
 
+// Get projects by user/author
+router.get("/user/:userId", optionalAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const {
+      page = 1,
+      limit = 12,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    // Build filter object
+    const filter = { author: userId, isPublished: true };
+
+    // Build sort object
+    const sort = {};
+    sort[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Execute query with pagination
+    const projects = await DIYProject.find(filter)
+      .populate("author", "username email")
+      .populate("comments.user", "username")
+      .sort(sort)
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    // Get total count for pagination
+    const total = await DIYProject.countDocuments(filter);
+
+    // Add user-specific data if authenticated
+    const projectsWithUserData = projects.map((project) => {
+      const projectObj = {
+        ...project,
+        isLiked: req.user
+          ? project.likes.some(
+              (like) => like.toString() === req.user._id.toString()
+            )
+          : false,
+        isSaved: req.user
+          ? req.user.savedProjects.some(
+              (saved) => saved.toString() === project._id.toString()
+            )
+          : false,
+        isAuthor: req.user
+          ? project.author._id.toString() === req.user._id.toString()
+          : false,
+      };
+      return projectObj;
+    });
+
+    res.json({
+      projects: projectsWithUserData,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+      totalProjects: total,
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPrevPage: page > 1,
+    });
+  } catch (error) {
+    console.error("Get user projects error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// Get user profile information
+router.get("/profile/:userId", optionalAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Get user info
+    const user = await User.findById(userId).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get user stats
+    const totalProjects = await DIYProject.countDocuments({
+      author: userId,
+      isPublished: true,
+    });
+
+    const totalLikes = await DIYProject.aggregate([
+      { $match: { author: userId, isPublished: true } },
+      { $project: { likesCount: { $size: "$likes" } } },
+      { $group: { _id: null, total: { $sum: "$likesCount" } } },
+    ]);
+
+    const totalViews = await DIYProject.aggregate([
+      { $match: { author: userId, isPublished: true } },
+      { $group: { _id: null, total: { $sum: "$views" } } },
+    ]);
+
+    const totalComments = await DIYProject.aggregate([
+      { $match: { author: userId, isPublished: true } },
+      { $project: { commentsCount: { $size: "$comments" } } },
+      { $group: { _id: null, total: { $sum: "$commentsCount" } } },
+    ]);
+
+    // Get category breakdown
+    const categoryStats = await DIYProject.aggregate([
+      { $match: { author: userId, isPublished: true } },
+      { $group: { _id: "$category", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+
+    // Get recent projects (last 5)
+    const recentProjects = await DIYProject.find({
+      author: userId,
+      isPublished: true,
+    })
+      .populate("author", "username")
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    const recentProjectsWithUserData = recentProjects.map((project) => ({
+      ...project,
+      isLiked: req.user
+        ? project.likes.some(
+            (like) => like.toString() === req.user._id.toString()
+          )
+        : false,
+      isSaved: req.user
+        ? req.user.savedProjects.some(
+            (saved) => saved.toString() === project._id.toString()
+          )
+        : false,
+      isAuthor: req.user
+        ? project.author._id.toString() === req.user._id.toString()
+        : false,
+    }));
+
+    res.json({
+      user: {
+        _id: user._id,
+        username: user.username,
+        email:
+          req.user && req.user._id.toString() === userId
+            ? user.email
+            : undefined,
+        createdAt: user.createdAt,
+        isOwnProfile: req.user ? req.user._id.toString() === userId : false,
+      },
+      stats: {
+        totalProjects,
+        totalLikes: totalLikes[0]?.total || 0,
+        totalViews: totalViews[0]?.total || 0,
+        totalComments: totalComments[0]?.total || 0,
+        savedProjectsCount: user.savedProjects.length,
+      },
+      categoryStats,
+      recentProjects: recentProjectsWithUserData,
+    });
+  } catch (error) {
+    console.error("Get user profile error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 // Get project statistics
 router.get("/stats/overview", async (req, res) => {
   try {
@@ -474,14 +647,17 @@ router.get("/categories/list", async (req, res) => {
   try {
     const categories = [
       "Woodworking",
-      "Home Decor",
-      "Crafts & Sewing",
-      "Garden & Outdoor",
       "Electronics",
-      "Kitchen & Food",
-      "Furniture",
-      "Art & Painting",
-      "Jewelry",
+      "Crafts & Arts",
+      "Home Decor",
+      "Jewelry Making",
+      "Gardening",
+      "Cooking & Baking",
+      "Sewing & Textiles",
+      "Automotive",
+      "3D Printing",
+      "Metalworking",
+      "Photography",
       "Other",
     ];
 
