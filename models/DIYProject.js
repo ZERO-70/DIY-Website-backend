@@ -18,14 +18,17 @@ const diyProjectSchema = new mongoose.Schema(
       required: true,
       enum: [
         "Woodworking",
-        "Home Decor",
-        "Crafts & Sewing",
-        "Garden & Outdoor",
         "Electronics",
-        "Kitchen & Food",
-        "Furniture",
-        "Art & Painting",
-        "Jewelry",
+        "Crafts & Arts",
+        "Home Decor",
+        "Jewelry Making",
+        "Gardening",
+        "Cooking & Baking",
+        "Sewing & Textiles",
+        "Automotive",
+        "3D Printing",
+        "Metalworking",
+        "Photography",
         "Other",
       ],
     },
@@ -184,7 +187,10 @@ diyProjectSchema.virtual("averageRating").get(function () {
   if (this.completions.length === 0) return 0;
   const ratingsWithValues = this.completions.filter((c) => c.rating);
   if (ratingsWithValues.length === 0) return 0;
-  const sum = ratingsWithValues.reduce((acc, completion) => acc + completion.rating, 0);
+  const sum = ratingsWithValues.reduce(
+    (acc, completion) => acc + completion.rating,
+    0
+  );
   return (sum / ratingsWithValues.length).toFixed(1);
 });
 
