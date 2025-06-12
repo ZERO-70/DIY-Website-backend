@@ -74,7 +74,7 @@ const seedProjects = [
     title: "Mason Jar Herb Garden",
     description:
       "Create a beautiful hanging herb garden using mason jars. Perfect for small spaces and beginners.",
-    category: "Garden & Outdoor",
+    category: "Gardening",
     difficulty: "Beginner",
     estimatedTime: "2-3 hours",
     materials: [
@@ -129,7 +129,7 @@ const seedProjects = [
     title: "Macrame Wall Hanging",
     description:
       "Learn the art of macrame by creating this beautiful wall hanging. Perfect for boho decor enthusiasts.",
-    category: "Crafts & Sewing",
+    category: "Crafts & Arts",
     difficulty: "Beginner",
     estimatedTime: "3-4 hours",
     materials: [
@@ -286,7 +286,7 @@ const seedProjects = [
     title: "Homemade Sourdough Bread",
     description:
       "Master the art of sourdough bread making from scratch. Includes starter creation and maintenance tips.",
-    category: "Kitchen & Food",
+    category: "Cooking & Baking",
     difficulty: "Intermediate",
     estimatedTime: "1 week (including starter)",
     materials: [
